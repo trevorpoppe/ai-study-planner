@@ -49,4 +49,92 @@ def parse_input(user_input: UserInput):
     if break_match:
         break_duration = int(break_match.group(1))
     if cycle_match:
-        cycles = int(c
+        cycles = int(cycle_match.group(1))
+
+    missing = []
+    if not study_duration:
+        missing.append("study_duration (in minutes)")
+    if not break_duration:
+        missing.append("break_duration (in minutes)")
+    if not cycles:
+        missing.append("cycles (number of study sessions)")
+
+    if missing:
+        return {
+            "status": "incomplete",
+            "message": "Missing required information.",
+            "missing_fields": missing
+        }
+
+    return {
+        "status": "complete",
+        "study_duration": study_duration,
+        "break_duration": break_duration,
+        "cycles": cycles
+    }
+
+# GPT-based parsing
+def gpt_parse_preferences(message: str) -> dict:
+    prompt = f"""Extract study preferences from the message below. Return as JSON with keys:
+- study_duration (in minutes)
+- break_duration (in minutes)
+- cycles (number of sessions)
+
+Message: "{message}"
+"""
+
+    response = openai.ChatCompletion.create(
+        model="gpt-4",
+        messages=[
+            {"role": "system", "content": "You extract structured data from user study planning messages."},
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0
+    )
+
+    content = response['choices'][0]['message']['content']
+
+    try:
+        return eval(content)  # You can replace with json.loads(content) if you format strict JSON
+    except Exception:
+        raise ValueError("Failed to parse response from OpenAI.")
+
+@app.post("/gpt-parse")
+def gpt_parse_input(user_input: UserInput):
+    try:
+        prefs = gpt_parse_preferences(user_input.message)
+        return prefs
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Timer endpoints
+@app.post("/start-timer")
+def start_timer(user_input: UserInput, background_tasks: BackgroundTasks):
+    global global_timer
+    try:
+        prefs = parse_input(user_input)
+        if prefs["status"] == "incomplete":
+            return prefs
+        schedule = build_schedule(
+            prefs["study_duration"],
+            prefs["break_duration"],
+            prefs["cycles"]
+        )
+        global_timer = SessionTimer(schedule)
+        background_tasks.add_task(global_timer.start)
+        return {"message": "Timer started", "schedule": schedule}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/stop-timer")
+def stop_timer():
+    if global_timer:
+        global_timer.stop()
+        return {"message": "Timer stopped"}
+    raise HTTPException(status_code=404, detail="No active timer")
+
+@app.get("/status")
+def get_status():
+    if global_timer:
+        return global_timer.status()
+    return {"message": "No timer running"}
