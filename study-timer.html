@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Study Timer</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 2rem;
+      max-width: 600px;
+      margin: auto;
+      background-color: #f9f9f9;
+    }
+    input, button {
+      padding: 0.5rem;
+      font-size: 1rem;
+    }
+    #timerDisplay {
+      font-size: 1.5rem;
+      font-family: monospace;
+      text-align: center;
+      margin-top: 1rem;
+    }
+    .controls {
+      display: flex;
+      gap: 1rem;
+      margin-top: 1rem;
+    }
+  </style>
+</head>
+<body>
+  <h1>AI Study Timer</h1>
+  <input type="text" id="userInput" placeholder="e.g., Study 45 min, 5 min breaks, 4 sessions" style="width: 100%;">
+  <div class="controls">
+    <button onclick="startTimer()">Start</button>
+    <button onclick="stopTimer()">Stop</button>
+  </div>
+  <div id="timerDisplay">No timer running</div>
+
+  <script>
+    let intervalId = null;
+
+    async function fetchStatus() {
+      const res = await fetch('/status');
+      const data = await res.json();
+
+      const display = document.getElementById('timerDisplay');
+      if (data.session_type && data.time_remaining_seconds !== undefined) {
+        const minutes = Math.floor(data.time_remaining_seconds / 60);
+        const seconds = data.time_remaining_seconds % 60;
+        display.textContent = `${data.session_type.toUpperCase()} - ${minutes}:${seconds.toString().padStart(2, '0')}`;
+      } else {
+        display.textContent = 'No timer running';
+      }
+    }
+
+    async function startTimer() {
+      const message = document.getElementById('userInput').value;
+      await fetch('/start-timer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message })
+      });
+      fetchStatus();
+      intervalId = setInterval(fetchStatus, 1000);
+    }
+
+    async function stopTimer() {
+      await fetch('/stop-timer', { method: 'POST' });
+      clearInterval(intervalId);
+      document.getElementById('timerDisplay').textContent = 'Timer stopped';
+    }
+  </script>
+</body>
+</html>
