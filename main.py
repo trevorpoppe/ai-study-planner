@@ -1,9 +1,10 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 import re
 import os
 import openai
 from dotenv import load_dotenv
+from timer import SessionTimer
 
 # Load environment variables
 load_dotenv()
@@ -18,6 +19,18 @@ app = FastAPI()
 # Input model
 class UserInput(BaseModel):
     message: str
+
+# In-memory timer instance
+global_timer = None
+
+# Helper: Build session schedule
+def build_schedule(study_duration, break_duration, cycles):
+    schedule = []
+    for i in range(cycles):
+        schedule.append(("study", study_duration))
+        if i < cycles - 1:
+            schedule.append(("break", break_duration))
+    return schedule
 
 # Fallback-aware regex parser
 @app.post("/parse")
@@ -80,7 +93,7 @@ Message: "{message}"
     content = response['choices'][0]['message']['content']
 
     try:
-        return eval(content)  # You can use json.loads() if content is strict JSON
+        return eval(content)  # You can switch to json.loads if the format is valid JSON
     except Exception:
         raise ValueError("Failed to parse response from OpenAI.")
 
@@ -91,3 +104,35 @@ def gpt_parse_input(user_input: UserInput):
         return prefs
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# Timer control routes
+@app.post("/start-timer")
+def start_timer(user_input: UserInput, background_tasks: BackgroundTasks):
+    global global_timer
+    try:
+        prefs = parse_input(user_input)
+        if prefs["status"] == "incomplete":
+            return prefs
+        schedule = build_schedule(
+            prefs["study_duration"],
+            prefs["break_duration"],
+            prefs["cycles"]
+        )
+        global_timer = SessionTimer(schedule)
+        background_tasks.add_task(global_timer.start)
+        return {"message": "Timer started", "schedule": schedule}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/stop-timer")
+def stop_timer():
+    if global_timer:
+        global_timer.stop()
+        return {"message": "Timer stopped"}
+    raise HTTPException(status_code=404, detail="No active timer")
+
+@app.get("/status")
+def get_status():
+    if global_timer:
+        return global_timer.status()
+    return {"message": "No timer running"}
