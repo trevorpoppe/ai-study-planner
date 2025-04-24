@@ -10,6 +10,9 @@ from timer import SessionTimer
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
+# ✅ TEMPORARY: Check if key loaded
+print("OPENAI API KEY:", openai.api_key)  # Remove this line after confirming!
+
 if not openai.api_key:
     raise RuntimeError("OpenAI API key not found. Please set it in the .env file.")
 
@@ -23,7 +26,7 @@ class UserInput(BaseModel):
 # In-memory timer instance
 global_timer = None
 
-# Helper: Build session schedule
+# Build session schedule from prefs
 def build_schedule(study_duration, break_duration, cycles):
     schedule = []
     for i in range(cycles):
@@ -32,7 +35,7 @@ def build_schedule(study_duration, break_duration, cycles):
             schedule.append(("break", break_duration))
     return schedule
 
-# Fallback-aware regex parser
+# Regex parsing with fallback for missing fields
 @app.post("/parse")
 def parse_input(user_input: UserInput):
     study_duration = break_duration = cycles = None
@@ -46,93 +49,4 @@ def parse_input(user_input: UserInput):
     if break_match:
         break_duration = int(break_match.group(1))
     if cycle_match:
-        cycles = int(cycle_match.group(1))
-
-    # Collect missing fields
-    missing = []
-    if not study_duration:
-        missing.append("study_duration (in minutes)")
-    if not break_duration:
-        missing.append("break_duration (in minutes)")
-    if not cycles:
-        missing.append("cycles (number of study sessions)")
-
-    if missing:
-        return {
-            "status": "incomplete",
-            "message": "Missing required information.",
-            "missing_fields": missing
-        }
-
-    return {
-        "status": "complete",
-        "study_duration": study_duration,
-        "break_duration": break_duration,
-        "cycles": cycles
-    }
-
-# GPT-based parser
-def gpt_parse_preferences(message: str) -> dict:
-    prompt = f"""Extract study preferences from the message below. Return as JSON with keys:
-- study_duration (in minutes)
-- break_duration (in minutes)
-- cycles (number of sessions)
-
-Message: "{message}"
-"""
-
-    response = openai.ChatCompletion.create(
-        model="gpt-4",
-        messages=[
-            {"role": "system", "content": "You extract structured data from user study planning messages."},
-            {"role": "user", "content": prompt}
-        ],
-        temperature=0
-    )
-
-    content = response['choices'][0]['message']['content']
-
-    try:
-        return eval(content)  # You can switch to json.loads if the format is valid JSON
-    except Exception:
-        raise ValueError("Failed to parse response from OpenAI.")
-
-@app.post("/gpt-parse")
-def gpt_parse_input(user_input: UserInput):
-    try:
-        prefs = gpt_parse_preferences(user_input.message)
-        return prefs
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# Timer control routes
-@app.post("/start-timer")
-def start_timer(user_input: UserInput, background_tasks: BackgroundTasks):
-    global global_timer
-    try:
-        prefs = parse_input(user_input)
-        if prefs["status"] == "incomplete":
-            return prefs
-        schedule = build_schedule(
-            prefs["study_duration"],
-            prefs["break_duration"],
-            prefs["cycles"]
-        )
-        global_timer = SessionTimer(schedule)
-        background_tasks.add_task(global_timer.start)
-        return {"message": "Timer started", "schedule": schedule}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-@app.post("/stop-timer")
-def stop_timer():
-    if global_timer:
-        global_timer.stop()
-        return {"message": "Timer stopped"}
-    raise HTTPException(status_code=404, detail="No active timer")
-
-@app.get("/status")
-def get_status():
-    if global_timer:
-        return global_timer.status()
-    return {"message": "No timer running"}
+        cycles = int(c
