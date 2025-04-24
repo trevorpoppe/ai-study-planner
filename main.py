@@ -1,4 +1,7 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import re
 import os
@@ -10,23 +13,33 @@ from timer import SessionTimer
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# ✅ TEMPORARY: Check if key loaded
-print("OPENAI API KEY:", openai.api_key)  # Remove this line after confirming!
-
-if not openai.api_key:
-    raise RuntimeError("OpenAI API key not found. Please set it in the .env file.")
-
 # FastAPI app
 app = FastAPI()
 
-# Input model
+# Allow frontend to call API (for local testing with HTML)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # You can restrict this to ["http://localhost:5500"] later
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Serve static files (e.g., study-timer.html)
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+@app.get("/")
+def serve_home():
+    return FileResponse(os.path.join("static", "study-timer.html"))
+
+# Request body model
 class UserInput(BaseModel):
     message: str
 
 # In-memory timer instance
 global_timer = None
 
-# Build session schedule from prefs
+# Schedule generator
 def build_schedule(study_duration, break_duration, cycles):
     schedule = []
     for i in range(cycles):
@@ -35,7 +48,7 @@ def build_schedule(study_duration, break_duration, cycles):
             schedule.append(("break", break_duration))
     return schedule
 
-# Regex parsing with fallback for missing fields
+# Regex-based fallback parser
 @app.post("/parse")
 def parse_input(user_input: UserInput):
     study_duration = break_duration = cycles = None
@@ -73,16 +86,15 @@ def parse_input(user_input: UserInput):
         "cycles": cycles
     }
 
-# GPT-based parsing
+# GPT-powered parser (optional)
 def gpt_parse_preferences(message: str) -> dict:
     prompt = f"""Extract study preferences from the message below. Return as JSON with keys:
 - study_duration (in minutes)
 - break_duration (in minutes)
 - cycles (number of sessions)
 
-Message: "{message}"
+Message: \"{message}\"
 """
-
     response = openai.ChatCompletion.create(
         model="gpt-4",
         messages=[
@@ -93,9 +105,8 @@ Message: "{message}"
     )
 
     content = response['choices'][0]['message']['content']
-
     try:
-        return eval(content)  # You can replace with json.loads(content) if you format strict JSON
+        return eval(content)  # Replace with json.loads() if needed
     except Exception:
         raise ValueError("Failed to parse response from OpenAI.")
 
@@ -107,7 +118,7 @@ def gpt_parse_input(user_input: UserInput):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Timer endpoints
+# Timer control endpoints
 @app.post("/start-timer")
 def start_timer(user_input: UserInput, background_tasks: BackgroundTasks):
     global global_timer
