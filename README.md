@@ -8,6 +8,7 @@ The AI Study Planner is a productivity tool designed to help students structure 
 
 # Folder Structure
 
+```plaintext
 ai-study-planner/
 ├── main.py                # FastAPI backend
 ├── timer.py               # Timer logic
