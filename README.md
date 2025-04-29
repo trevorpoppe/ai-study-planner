@@ -8,14 +8,7 @@ The AI Study Planner is a productivity tool designed to help students structure 
 
 # Folder Structure
 
-ai-study-planner/
-├── main.py                # FastAPI backend handling requests and timer logic
-├── timer.py               # SessionTimer class to manage study/break cycles
-├── static/
-│   └── study-timer.html   # Frontend UI for the timer and chatbot input
-├── .env                   # API keys and environment variables
-├── requirements.txt       # Python dependencies
-└── README.md
+<pre><code>```plaintext ai-study-planner/ ├── main.py # FastAPI backend ├── timer.py # Timer logic ├── static/ │ └── study-timer.html # Frontend UI ├── .env # Environment variables ├── requirements.txt # Python dependencies └── README.md # Documentation ```</code></pre>
 
 ---
 
