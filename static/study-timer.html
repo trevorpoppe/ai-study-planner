@@ -35,6 +35,19 @@
       color: red;
       margin-top: 1rem;
     }
+    #progressContainer {
+      width: 100%;
+      background: #eee;
+      height: 20px;
+      border-radius: 10px;
+      margin-top: 1rem;
+    }
+    #progressBar {
+      width: 0%;
+      height: 100%;
+      background: #4caf50;
+      border-radius: 10px;
+    }
   </style>
 </head>
 <body>
@@ -53,28 +66,46 @@
   </div>
 
   <div id="timerDisplay">No timer running</div>
+  <div id="progressContainer">
+    <div id="progressBar"></div>
+  </div>
   <div id="error"></div>
 
   <script>
     const API_BASE = "http://localhost:8000";
     let intervalId = null;
+    let sessionDurations = []; // session durations in seconds
 
     async function fetchStatus() {
       const res = await fetch(`${API_BASE}/status`);
       const data = await res.json();
       const display = document.getElementById('timerDisplay');
       const error = document.getElementById('error');
+      const progressBar = document.getElementById('progressBar');
       error.textContent = "";
 
       if (data.session_type && data.time_remaining_seconds !== undefined) {
         const minutes = Math.floor(data.time_remaining_seconds / 60);
         const seconds = data.time_remaining_seconds % 60;
         display.textContent = `${data.session_type.toUpperCase()} – ${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+        // Update progress bar
+        const index = data.step - 1;
+        const total = sessionDurations[index] || 1;
+        const elapsed = total - data.time_remaining_seconds;
+        const percent = Math.min(100, Math.max(0, (elapsed / total) * 100));
+        progressBar.style.width = `${percent}%`;
+
+        // Change color based on session type
+        progressBar.style.background = data.session_type === "break" ? "#2196f3" : "#4caf50";
+
       } else if (data.message === "Completed") {
         display.textContent = "All sessions complete!";
+        progressBar.style.width = "100%";
         clearInterval(intervalId);
       } else {
         display.textContent = "No timer running";
+        progressBar.style.width = "0%";
         clearInterval(intervalId);
       }
     }
@@ -102,8 +133,12 @@
         return;
       }
 
+      // Store durations (in seconds)
+      sessionDurations = data.schedule.map(([type, minutes]) => minutes * 60);
+
       error.textContent = "";
       display.textContent = "Timer started!";
+      document.getElementById('progressBar').style.width = "0%";
       clearInterval(intervalId);
       intervalId = setInterval(fetchStatus, 1000);
 
@@ -117,10 +152,9 @@
 
       try {
         const response = await fetch(`${API_BASE}/stop-timer`, { method: 'POST' });
-        if (!response.ok) {
-          throw new Error('Timer not active');
-        }
+        if (!response.ok) throw new Error('Timer not active');
         display.textContent = "Timer stopped";
+        document.getElementById('progressBar').style.width = "0%";
       } catch (err) {
         display.textContent = "No timer running";
         error.textContent = err.message;
