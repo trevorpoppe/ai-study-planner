@@ -44,7 +44,7 @@ The main.py file is the core API server for the application. Here's a breakdown 
 1. Download the Project
   - Clone the repository: 
 ```
-git clone https://github.com/your-username/ai-study-planner.git
+git clone https://github.com/trevorpoppe/ai-study-planner.git
 cd ai-study-planner
 ```
 
