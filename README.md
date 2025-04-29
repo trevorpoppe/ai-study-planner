@@ -17,7 +17,7 @@ ai-study-planner/
 ├── .env                   # Environment variables
 ├── requirements.txt       # Python dependencies
 └── README.md              # Documentation
-
+```
 ---
 
 # main.py Overview
