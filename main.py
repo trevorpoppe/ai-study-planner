@@ -5,11 +5,13 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import re
 import os
-from dotenv import load_dotenv
 from timer import SessionTimer
+from dotenv import load_dotenv
+import openai
+import os
 
-# Load environment variables
 load_dotenv()
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 # FastAPI app
 app = FastAPI()
