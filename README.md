@@ -42,11 +42,17 @@ The main.py file is the core API server for the application. Here's a breakdown 
 # How to Use UI
 
 1. Download the Project
-  - Clone the repository: git clone https://github.com/your-username/ai-study-planner.git
+  - Clone the repository: 
+```
+git clone https://github.com/your-username/ai-study-planner.git
 cd ai-study-planner
+```
 
 2. Launch App
-  - Start FastAPI server: uvicorn main:app --reload
+  - Start FastAPI server: 
+```
+uvicorn main:app --reload
+```
 
 3. In browser, go to http://127.0.0.1:8000
 
