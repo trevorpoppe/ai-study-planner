@@ -3,9 +3,9 @@ import threading
 
 class SessionTimer:
     def __init__(self, schedule):
-        self.schedule = schedule  # e.g., [("study", 45), ("break", 5), ...]
+        self.schedule = schedule  # List of (session_type, duration_minutes)
         self.current_index = 0
-        self.remaining = schedule[0][1] * 60  # in seconds
+        self.remaining = schedule[0][1] * 60  # seconds
         self.running = False
         self._lock = threading.Lock()
 
