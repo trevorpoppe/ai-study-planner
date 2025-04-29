@@ -1,40 +1,42 @@
-import asyncio
-from typing import List, Tuple
+import time
+import threading
 
 class SessionTimer:
-    def __init__(self, schedule: List[Tuple[str, int]]):
+    def __init__(self, schedule):
         self.schedule = schedule  # e.g., [("study", 45), ("break", 5), ...]
         self.current_index = 0
         self.remaining = schedule[0][1] * 60  # in seconds
         self.running = False
-        self._task = None
+        self._lock = threading.Lock()
 
-    async def _run_timer(self):
+    def start(self):
+        self.running = True
+        threading.Thread(target=self._run_timer, daemon=True).start()
+
+    def _run_timer(self):
         while self.running and self.current_index < len(self.schedule):
             while self.remaining > 0 and self.running:
-                await asyncio.sleep(1)
-                self.remaining -= 1
+                time.sleep(1)
+                with self._lock:
+                    self.remaining -= 1
             if self.running:
                 self.current_index += 1
                 if self.current_index < len(self.schedule):
-                    self.remaining = self.schedule[self.current_index][1] * 60
+                    with self._lock:
+                        self.remaining = self.schedule[self.current_index][1] * 60
                 else:
                     self.running = False  # All sessions done
-
-    def start(self):
-        if not self.running:
-            self.running = True
-            self._task = asyncio.create_task(self._run_timer())
 
     def stop(self):
         self.running = False
 
     def status(self):
-        if self.current_index >= len(self.schedule):
-            return "Completed"
-        return {
-            "session_type": self.schedule[self.current_index][0],
-            "time_remaining_seconds": self.remaining,
-            "step": self.current_index + 1,
-            "total_steps": len(self.schedule)
-        }
+        with self._lock:
+            if self.current_index >= len(self.schedule):
+                return {"message": "Completed"}
+            return {
+                "session_type": self.schedule[self.current_index][0],
+                "time_remaining_seconds": self.remaining,
+                "step": self.current_index + 1,
+                "total_steps": len(self.schedule)
+            }
