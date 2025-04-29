@@ -90,6 +90,7 @@ def start_timer(user_input: UserInput, background_tasks: BackgroundTasks):
             prefs["cycles"]
         )
         global_timer = SessionTimer(schedule)
+        print("Schedule loaded:", schedule)
         background_tasks.add_task(global_timer.start)
         return {"message": "Timer started", "schedule": schedule}
     except Exception as e:
