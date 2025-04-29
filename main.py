@@ -3,12 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
-import re
 import os
 from timer import SessionTimer
 from dotenv import load_dotenv
 import openai
-import os
+import json
 
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
@@ -39,31 +38,70 @@ class UserInput(BaseModel):
 # Global timer instance
 global_timer = None
 
-# Extract preferences using regex
 def extract_preferences(message: str):
-    study_match = re.search(r'study(?:\sfor)?\s*(\d+)\s*(?:minutes|min)', message, re.IGNORECASE)
-    break_match = re.search(r'(?:breaks?|rest(?:\stime)?)\s*(?:for|of|:)?\s*(\d+)\s*(?:minutes|min)', message, re.IGNORECASE)
-    cycle_match = re.search(r'(\d+)\s*(?:sessions?|cycles?)', message, re.IGNORECASE)
+    prompt = f"""
+Extract the following values from this natural language prompt:
+- study_duration in minutes (number only)
+- break_duration in minutes (number only)
+- cycles (number of sessions, just a number)
 
-    study_duration = int(study_match.group(1)) if study_match else None
-    break_duration = int(break_match.group(1)) if break_match else None
-    cycles = int(cycle_match.group(1)) if cycle_match else None
+Respond with raw JSON only, like:
+{{
+  "study_duration": 25,
+  "break_duration": 5,
+  "cycles": 4
+}}
 
-    missing = []
-    if not study_duration:
-        missing.append("study_duration")
-    if not break_duration:
-        missing.append("break_duration")
-    if not cycles:
-        missing.append("cycles")
+Do not include any explanation, markdown, or extra formatting.
 
-    return {
-        "status": "complete" if not missing else "incomplete",
-        "study_duration": study_duration,
-        "break_duration": break_duration,
-        "cycles": cycles,
-        "missing_fields": missing
-    }
+Prompt: "{message}"
+"""
+
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You extract structured data from natural language prompts. Respond with JSON only and no formatting or explanation."
+                },
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0
+        )
+        content = response.choices[0].message['content'].strip()
+        data = json.loads(content)
+
+        study_duration = data.get("study_duration")
+        break_duration = data.get("break_duration")
+        cycles = data.get("cycles")
+
+        missing = []
+        if not study_duration:
+            missing.append("study_duration")
+        if not break_duration:
+            missing.append("break_duration")
+        if not cycles:
+            missing.append("cycles")
+
+        return {
+            "status": "complete" if not missing else "incomplete",
+            "study_duration": study_duration,
+            "break_duration": break_duration,
+            "cycles": cycles,
+            "missing_fields": missing
+        }
+
+    except Exception as e:
+        print("OpenAI extraction error:", e)
+        return {
+            "status": "incomplete",
+            "study_duration": None,
+            "break_duration": None,
+            "cycles": None,
+            "missing_fields": ["study_duration", "break_duration", "cycles"],
+            "error": str(e)
+        }
 
 # Build the session schedule
 def build_schedule(study_duration, break_duration, cycles):
