@@ -31,4 +31,84 @@
       background-color: #ccc;
       cursor: not-allowed;
     }
-  </
+  </style>
+</head>
+<body>
+  <h1>AI Study Timer</h1>
+
+  <input
+    type="text"
+    id="userInput"
+    placeholder="e.g., Study 45 min, 5 min breaks, 4 sessions"
+    style="width: 100%;"
+  />
+
+  <div class="controls">
+    <button id="startButton" onclick="startTimer()">Start</button>
+    <button id="stopButton" onclick="stopTimer()">Stop</button>
+  </div>
+
+  <div id="timerDisplay">No timer running</div>
+
+  <script>
+    let intervalId = null;
+
+    async function fetchStatus() {
+      const res = await fetch('/status');
+      const data = await res.json();
+
+      const display = document.getElementById('timerDisplay');
+
+      if (data.session_type && data.time_remaining_seconds !== undefined) {
+        const minutes = Math.floor(data.time_remaining_seconds / 60);
+        const seconds = data.time_remaining_seconds % 60;
+        display.textContent = `${data.session_type.toUpperCase()} - ${minutes}:${seconds.toString().padStart(2, '0')}`;
+      } else if (data.message === "Completed") {
+        display.textContent = "Session Complete!";
+        clearInterval(intervalId);
+      } else {
+        display.textContent = "No timer running";
+        clearInterval(intervalId);
+      }
+    }
+
+    async function startTimer() {
+      const message = document.getElementById('userInput').value.trim();
+      if (!message) {
+        alert("Please enter your study preferences!");
+        return;
+      }
+
+      await fetch('/start-timer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message })
+      });
+
+      fetchStatus();
+      clearInterval(intervalId);
+      intervalId = setInterval(fetchStatus, 1000);
+
+      document.getElementById('startButton').disabled = true;
+      document.getElementById('stopButton').disabled = false;
+    }
+
+    async function stopTimer() {
+      try {
+        const response = await fetch('/stop-timer', { method: 'POST' });
+        if (!response.ok) {
+          throw new Error('Timer not active');
+        }
+        clearInterval(intervalId);
+        document.getElementById('timerDisplay').textContent = 'Timer stopped';
+      } catch (error) {
+        clearInterval(intervalId);
+        document.getElementById('timerDisplay').textContent = 'No timer running';
+      }
+
+      document.getElementById('startButton').disabled = false;
+      document.getElementById('stopButton').disabled = true;
+    }
+  </script>
+</body>
+</html>
