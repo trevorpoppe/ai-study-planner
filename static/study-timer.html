@@ -31,6 +31,10 @@
       background-color: #ccc;
       cursor: not-allowed;
     }
+    #error {
+      color: red;
+      margin-top: 1rem;
+    }
   </style>
 </head>
 <body>
@@ -45,26 +49,29 @@
 
   <div class="controls">
     <button id="startButton" onclick="startTimer()">Start</button>
-    <button id="stopButton" onclick="stopTimer()">Stop</button>
+    <button id="stopButton" onclick="stopTimer()" disabled>Stop</button>
   </div>
 
   <div id="timerDisplay">No timer running</div>
+  <div id="error"></div>
 
   <script>
+    const API_BASE = "http://localhost:8000";
     let intervalId = null;
 
     async function fetchStatus() {
-      const res = await fetch('/status');
+      const res = await fetch(`${API_BASE}/status`);
       const data = await res.json();
-
       const display = document.getElementById('timerDisplay');
+      const error = document.getElementById('error');
+      error.textContent = "";
 
       if (data.session_type && data.time_remaining_seconds !== undefined) {
         const minutes = Math.floor(data.time_remaining_seconds / 60);
         const seconds = data.time_remaining_seconds % 60;
-        display.textContent = `${data.session_type.toUpperCase()} - ${minutes}:${seconds.toString().padStart(2, '0')}`;
+        display.textContent = `${data.session_type.toUpperCase()} – ${minutes}:${seconds.toString().padStart(2, '0')}`;
       } else if (data.message === "Completed") {
-        display.textContent = "Session Complete!";
+        display.textContent = "All sessions complete!";
         clearInterval(intervalId);
       } else {
         display.textContent = "No timer running";
@@ -74,18 +81,29 @@
 
     async function startTimer() {
       const message = document.getElementById('userInput').value.trim();
+      const display = document.getElementById('timerDisplay');
+      const error = document.getElementById('error');
+
       if (!message) {
-        alert("Please enter your study preferences!");
+        error.textContent = "Please enter your study preferences.";
         return;
       }
 
-      await fetch('/start-timer', {
+      const res = await fetch(`${API_BASE}/start-timer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message })
       });
 
-      fetchStatus();
+      const data = await res.json();
+      if (data.status === "incomplete") {
+        error.textContent = `Missing fields: ${data.missing_fields.join(", ")}`;
+        display.textContent = "Error starting timer";
+        return;
+      }
+
+      error.textContent = "";
+      display.textContent = "Timer started!";
       clearInterval(intervalId);
       intervalId = setInterval(fetchStatus, 1000);
 
@@ -94,18 +112,21 @@
     }
 
     async function stopTimer() {
+      const display = document.getElementById('timerDisplay');
+      const error = document.getElementById('error');
+
       try {
-        const response = await fetch('/stop-timer', { method: 'POST' });
+        const response = await fetch(`${API_BASE}/stop-timer`, { method: 'POST' });
         if (!response.ok) {
           throw new Error('Timer not active');
         }
-        clearInterval(intervalId);
-        document.getElementById('timerDisplay').textContent = 'Timer stopped';
-      } catch (error) {
-        clearInterval(intervalId);
-        document.getElementById('timerDisplay').textContent = 'No timer running';
+        display.textContent = "Timer stopped";
+      } catch (err) {
+        display.textContent = "No timer running";
+        error.textContent = err.message;
       }
 
+      clearInterval(intervalId);
       document.getElementById('startButton').disabled = false;
       document.getElementById('stopButton').disabled = true;
     }
