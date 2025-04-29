@@ -25,7 +25,7 @@ class SessionTimer:
                     with self._lock:
                         self.remaining = self.schedule[self.current_index][1] * 60
                 else:
-                    self.running = False  # All sessions done
+                    self.running = False  # All sessions complete
 
     def stop(self):
         self.running = False
