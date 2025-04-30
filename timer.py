@@ -5,7 +5,7 @@ class SessionTimer:
     def __init__(self, schedule):
         self.schedule = schedule  # List of (session_type, duration_minutes)
         self.current_index = 0
-        self.remaining = schedule[0][1] * 60  # seconds
+        self.remaining = schedule[0][1]
         self.running = False
         self._lock = threading.Lock()
 
@@ -23,7 +23,7 @@ class SessionTimer:
                 self.current_index += 1
                 if self.current_index < len(self.schedule):
                     with self._lock:
-                        self.remaining = self.schedule[self.current_index][1] * 60
+                        self.remaining = self.schedule[self.current_index][1]
                 else:
                     self.running = False  # All sessions complete
 
