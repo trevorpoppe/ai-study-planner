@@ -41,14 +41,18 @@ global_timer = None
 def extract_preferences(message: str):
     prompt = f"""
 Extract the following values from this natural language prompt:
-- study_duration in minutes (number only)
-- break_duration in minutes (number only)
+- study_duration in seconds (number only)
+- break_duration in seconds (number only)
 - cycles (number of sessions, just a number)
+
+If a unit like "minutes" or "min" is used, multiply by 60.
+If a unit like "seconds" or "sec" is used, keep the number as-is.
+Always return values in **seconds**.
 
 Respond with raw JSON only, like:
 {{
-  "study_duration": 25,
-  "break_duration": 5,
+  "study_duration": 1500,
+  "break_duration": 300,
   "cycles": 4
 }}
 
@@ -56,6 +60,7 @@ Do not include any explanation, markdown, or extra formatting.
 
 Prompt: "{message}"
 """
+
 
     try:
         response = openai.ChatCompletion.create(
