@@ -40,26 +40,30 @@ global_timer = None
 
 def extract_preferences(message: str):
     prompt = f"""
-Extract the following values from this natural language prompt:
-- study_duration in seconds (number only)
-- break_duration in seconds (number only)
-- cycles (number of sessions, just a number)
+You are a natural language interpreter for study plans. Extract the following:
+- "study_duration" in seconds
+- "break_duration" in seconds
+- "cycles" (number of sessions)
 
-If a unit like "minutes" or "min" is used, multiply by 60.
-If a unit like "seconds" or "sec" is used, keep the number as-is.
-Always return values in **seconds**.
+Only include the number of seconds (always convert minutes to seconds).
+Only assign values based on their associated label — e.g. "study", "break", or "session".
 
-Respond with raw JSON only, like:
+For example:
+- "Study 25 minutes with 5 min breaks for 4 sessions" → study_duration: 1500, break_duration: 300, cycles: 4
+- "Study for 1 minute, 10 second break, 2 sessions" → study_duration: 60, break_duration: 10, cycles: 2
+
+Output raw JSON only like this:
 {{
   "study_duration": 1500,
   "break_duration": 300,
   "cycles": 4
 }}
 
-Do not include any explanation, markdown, or extra formatting.
+Do not include any explanation or formatting.
 
 Prompt: "{message}"
 """
+
 
 
     try:
