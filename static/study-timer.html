@@ -4,251 +4,102 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AI Study Timer</title>
-
-  <!-- Google Font -->
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
-
   <style>
     body {
-      font-family: 'Inter', sans-serif;
-      margin: 0;
-      padding: 0;
-    }
-
-    body.light {
-      background-color: #f0f2f5;
-      color: #333;
-    }
-
-    body.dark {
-      background-color: #121212;
-      color: #eee;
-    }
-
-    .container {
-      background: white;
+      font-family: Arial, sans-serif;
       padding: 2rem;
-      border-radius: 16px;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
       max-width: 600px;
-      margin: 4rem auto;
-      position: relative;
+      margin: auto;
+      background-color: #f9f9f9;
     }
-
-    body.dark .container {
-      background: #1e1e1e;
-      box-shadow: 0 8px 24px rgba(255, 255, 255, 0.05);
-    }
-
-    h1 {
-      text-align: center;
-      font-size: 2rem;
-      font-weight: 600;
-      margin-bottom: 1.5rem;
-    }
-
-    #themeToggle {
-      position: absolute;
-      top: 1rem;
-      right: 1rem;
-      background: none;
-      border: none;
-      font-size: 1.5rem;
-      cursor: pointer;
-    }
-
-    input {
-      width: 100%;
-      padding: 0.75rem;
-      border: 1px solid #ccc;
-      border-radius: 8px;
+    input, button {
+      padding: 0.5rem;
       font-size: 1rem;
-      margin-bottom: 1rem;
-      background-color: white;
-      color: black;
     }
-
-    body.dark input {
-      background-color: #2c2c2c;
-      color: white;
-      border: 1px solid #555;
+    #timerDisplay {
+      font-size: 1.5rem;
+      font-family: monospace;
+      text-align: center;
+      margin-top: 1rem;
     }
-
     .controls {
       display: flex;
       gap: 1rem;
-      justify-content: center;
       margin-top: 1rem;
     }
-
-    button {
-      padding: 0.75rem 1.25rem;
-      border: none;
-      border-radius: 8px;
-      background-color: #4caf50;
-      color: white;
-      font-weight: bold;
-      font-size: 1rem;
-      cursor: pointer;
-      transition: background-color 0.2s ease;
-    }
-
-    button:hover:not(:disabled) {
-      background-color: #43a047;
-    }
-
     button:disabled {
       background-color: #ccc;
       cursor: not-allowed;
     }
-
-    #timerDisplay {
-      font-size: 1.25rem;
-      font-family: monospace;
-      text-align: center;
-      margin-top: 1.5rem;
-    }
-
-    #progressContainer {
-      width: 100%;
-      background: #e0e0e0;
-      height: 16px;
-      border-radius: 8px;
-      margin-top: 1rem;
-      overflow: hidden;
-    }
-
-    #progressBar {
-      height: 100%;
-      width: 0%;
-      background: #4caf50;
-      transition: width 0.3s ease;
-    }
-
-    body.dark #progressContainer {
-      background: #333;
-    }
-
-    body.dark #progressBar {
-      background: #81c784;
-    }
-
-    #error {
-      color: #e53935;
-      margin-top: 1rem;
-      text-align: center;
-    }
   </style>
 </head>
 <body>
-  <div class="container">
-    <button id="themeToggle">🌙</button>
-    <h1>AI Study Timer</h1>
+  <h1>AI Study Timer</h1>
 
-    <input
-      type="text"
-      id="userInput"
-      placeholder="e.g., Study 45 min, 5 min breaks, 4 sessions"
-    />
+  <input
+    type="text"
+    id="userInput"
+    placeholder="e.g., Study 45 min, 5 min breaks, 4 sessions"
+    style="width: 100%;"
+  />
 
-    <div class="controls">
-      <button id="startButton" onclick="startTimer()">Start</button>
-      <button id="stopButton" onclick="stopTimer()" disabled>Stop</button>
-    </div>
-
-    <div id="timerDisplay">No timer running</div>
-
-    <div id="progressContainer">
-      <div id="progressBar"></div>
-    </div>
-
-    <div id="error"></div>
+  <div class="controls">
+    <button id="startButton" onclick="startTimer()">Start</button>
+    <button id="stopButton" onclick="stopTimer()">Stop</button>
   </div>
 
+  <div id="timerDisplay">No timer running</div>
+
+  <!-- Alarm sound -->
+  <audio id="alarmSound" src="/static/alarm.wav"></audio>
+
   <script>
-    const API_BASE = "http://localhost:8000";
     let intervalId = null;
-    let sessionDurations = [];
-
-    // Theme setup
-    const themeToggle = document.getElementById('themeToggle');
-    const savedTheme = localStorage.getItem('theme');
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const initialTheme = savedTheme || (prefersDark ? 'dark' : 'light');
-    document.body.classList.add(initialTheme);
-    themeToggle.textContent = initialTheme === 'dark' ? '☀️' : '🌙';
-
-    themeToggle.addEventListener('click', () => {
-      const isDark = document.body.classList.contains('dark');
-      document.body.classList.toggle('dark');
-      document.body.classList.toggle('light');
-      const newTheme = isDark ? 'light' : 'dark';
-      localStorage.setItem('theme', newTheme);
-      themeToggle.textContent = newTheme === 'dark' ? '☀️' : '🌙';
-    });
+    let lastSessionType = null;
 
     async function fetchStatus() {
-      const res = await fetch(`${API_BASE}/status`);
+      const res = await fetch('/status');
       const data = await res.json();
+
       const display = document.getElementById('timerDisplay');
-      const error = document.getElementById('error');
-      const progressBar = document.getElementById('progressBar');
-      error.textContent = "";
 
       if (data.session_type && data.time_remaining_seconds !== undefined) {
         const minutes = Math.floor(data.time_remaining_seconds / 60);
         const seconds = data.time_remaining_seconds % 60;
+        display.textContent = `${data.session_type.toUpperCase()} - ${minutes}:${seconds.toString().padStart(2, '0')}`;
 
-        const sessionLabel = `${data.session_type.toUpperCase()} – ${minutes}:${seconds.toString().padStart(2, '0')}`;
-        const currentCycle = Math.floor((data.step + 1) / 2);
-        const totalCycles = Math.ceil(data.total_steps / 2);
-        display.textContent = `Cycle ${currentCycle} of ${totalCycles}: ${sessionLabel}`;
+        // Play alarm if session type has changed
+        if (lastSessionType && lastSessionType !== data.session_type) {
+          document.getElementById('alarmSound').play();
+        }
 
-        const index = data.step - 1;
-        const total = sessionDurations[index] || 1;
-        const elapsed = total - data.time_remaining_seconds;
-        const percent = Math.min(100, Math.max(0, (elapsed / total) * 100));
-        progressBar.style.width = `${percent}%`;
-        progressBar.style.background = data.session_type === "break" ? "#2196f3" : "#4caf50";
+        lastSessionType = data.session_type;
       } else if (data.message === "Completed") {
-        display.textContent = "🎉 All sessions complete!";
-        progressBar.style.width = "100%";
+        display.textContent = "Session Complete!";
         clearInterval(intervalId);
+        document.getElementById('alarmSound').play();
+        lastSessionType = null;
       } else {
         display.textContent = "No timer running";
-        progressBar.style.width = "0%";
         clearInterval(intervalId);
+        lastSessionType = null;
       }
     }
 
     async function startTimer() {
       const message = document.getElementById('userInput').value.trim();
-      const display = document.getElementById('timerDisplay');
-      const error = document.getElementById('error');
-
       if (!message) {
-        error.textContent = "Please enter your study preferences.";
+        alert("Please enter your study preferences!");
         return;
       }
 
-      const res = await fetch(`${API_BASE}/start-timer`, {
+      await fetch('/start-timer', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message })
       });
 
-      const data = await res.json();
-      if (data.status === "incomplete") {
-        error.textContent = `Missing fields: ${data.missing_fields.join(", ")}`;
-        display.textContent = "Error starting timer";
-        return;
-      }
-
-      sessionDurations = data.schedule.map(([type, minutes]) => minutes * 60);
-
-      error.textContent = "";
-      display.textContent = "Timer started!";
-      document.getElementById('progressBar').style.width = "0%";
+      fetchStatus();
       clearInterval(intervalId);
       intervalId = setInterval(fetchStatus, 1000);
 
@@ -257,20 +108,16 @@
     }
 
     async function stopTimer() {
-      const display = document.getElementById('timerDisplay');
-      const error = document.getElementById('error');
-
       try {
-        const response = await fetch(`${API_BASE}/stop-timer`, { method: 'POST' });
+        const response = await fetch('/stop-timer', { method: 'POST' });
         if (!response.ok) throw new Error('Timer not active');
-        display.textContent = "Timer stopped";
-        document.getElementById('progressBar').style.width = "0%";
-      } catch (err) {
-        display.textContent = "No timer running";
-        error.textContent = err.message;
+        clearInterval(intervalId);
+        document.getElementById('timerDisplay').textContent = 'Timer stopped';
+      } catch (error) {
+        clearInterval(intervalId);
+        document.getElementById('timerDisplay').textContent = 'No timer running';
       }
 
-      clearInterval(intervalId);
       document.getElementById('startButton').disabled = false;
       document.getElementById('stopButton').disabled = true;
     }
