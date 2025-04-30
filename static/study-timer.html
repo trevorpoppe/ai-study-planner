@@ -1,0 +1,218 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Study Timer</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f2f4f8;
+      color: #333;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem;
+    }
+
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+    }
+
+    #instructions {
+      max-width: 500px;
+      margin-bottom: 1rem;
+      text-align: center;
+      font-size: 0.95rem;
+      color: #555;
+    }
+
+    input[type="text"] {
+      width: 100%;
+      max-width: 500px;
+      padding: 0.75rem;
+      font-size: 1rem;
+      border: 1px solid #ccc;
+      border-radius: 10px;
+      margin-bottom: 1rem;
+    }
+
+    .controls {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+
+    button {
+      padding: 0.75rem 1.5rem;
+      font-size: 1rem;
+      border: none;
+      border-radius: 10px;
+      background-color: #4a90e2;
+      color: white;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+
+    #timerDisplay {
+      font-size: 2rem;
+      font-weight: bold;
+      margin-top: 1rem;
+    }
+
+    #progressContainer {
+      width: 100%;
+      max-width: 500px;
+      background-color: #e0e0e0;
+      border-radius: 10px;
+      overflow: hidden;
+      height: 20px;
+      margin-top: 1rem;
+    }
+
+    #progressBar {
+      height: 100%;
+      width: 0%;
+      background-color: #76c7c0;
+      transition: width 1s linear;
+    }
+
+    #log {
+      margin-top: 1rem;
+      max-width: 500px;
+      width: 100%;
+      font-size: 0.9rem;
+      background: #ffffffaa;
+      border-radius: 10px;
+      padding: 1rem;
+      white-space: pre-wrap;
+      border: 1px solid #ccc;
+    }
+  </style>
+</head>
+<body>
+  <h1>AI Study Timer</h1>
+
+  <div id="instructions">
+    Example input: <em>"Study 1 minute, 10 second breaks, 4 sessions"</em><br>
+    <strong>Note:</strong> "seconds" support depends on backend parsing.
+  </div>
+
+  <input type="text" id="userInput" placeholder="e.g., Study 1 min, 10 sec breaks, 4 sessions" />
+
+  <div class="controls">
+    <button id="startButton" onclick="startTimer()">Start</button>
+    <button id="stopButton" onclick="stopTimer()">Stop</button>
+  </div>
+
+  <div id="timerDisplay">No timer running</div>
+
+  <div id="progressContainer">
+    <div id="progressBar"></div>
+  </div>
+
+  <div id="log"></div>
+
+  <audio id="alarmSound" src="/static/alarm.wav" preload="auto"></audio>
+
+  <script>
+    let intervalId = null;
+    let progressTimer = null;
+    let lastStep = 0;
+    let stepDuration = 0;
+
+    function appendLog(text) {
+      const log = document.getElementById('log');
+      const timestamp = new Date().toLocaleTimeString();
+      log.textContent += `[${timestamp}] ${text}\n`;
+    }
+
+    function playAlarm() {
+      const sound = document.getElementById("alarmSound");
+      sound.pause();
+      sound.currentTime = 0;
+      sound.play().catch(e => console.warn("Audio playback failed", e));
+    }
+
+    function resetProgress(duration) {
+      clearInterval(progressTimer);
+      const bar = document.getElementById("progressBar");
+      let elapsed = 0;
+      bar.style.width = "0%";
+      progressTimer = setInterval(() => {
+        elapsed += 1;
+        let percent = Math.min((elapsed / duration) * 100, 100);
+        bar.style.width = percent + "%";
+        if (percent >= 100) clearInterval(progressTimer);
+      }, 1000);
+    }
+
+    async function fetchStatus() {
+      const res = await fetch('/status');
+      const data = await res.json();
+      const display = document.getElementById('timerDisplay');
+
+      if (data.session_type && data.time_remaining_seconds !== undefined) {
+        const minutes = Math.floor(data.time_remaining_seconds / 60);
+        const seconds = data.time_remaining_seconds % 60;
+        display.textContent = `${data.session_type.toUpperCase()} - ${minutes}:${seconds.toString().padStart(2, '0')}`;
+
+        if (data.step !== lastStep) {
+          lastStep = data.step;
+          stepDuration = data.time_remaining_seconds;
+          playAlarm();
+          appendLog(`Switched to ${data.session_type.toUpperCase()} session`);
+          resetProgress(stepDuration);
+        }
+      } else if (data.message === "Completed") {
+        display.textContent = "Session Complete!";
+        clearInterval(intervalId);
+        clearInterval(progressTimer);
+        document.getElementById("progressBar").style.width = "100%";
+        playAlarm();
+        appendLog("🎉 All sessions completed!");
+      } else {
+        display.textContent = "No timer running";
+        clearInterval(intervalId);
+        clearInterval(progressTimer);
+        document.getElementById("progressBar").style.width = "0%";
+      }
+    }
+
+    async function startTimer() {
+      const message = document.getElementById("userInput").value.trim();
+      if (!message) return alert("Please enter your study prompt.");
+      const response = await fetch('/start-timer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message })
+      });
+
+      const result = await response.json();
+      if (result.schedule) appendLog("📘 Timer started.");
+
+      fetchStatus();
+      intervalId = setInterval(fetchStatus, 1000);
+      document.getElementById("startButton").disabled = true;
+      document.getElementById("stopButton").disabled = false;
+    }
+
+    async function stopTimer() {
+      await fetch('/stop-timer', { method: 'POST' });
+      clearInterval(intervalId);
+      clearInterval(progressTimer);
+      document.getElementById("timerDisplay").textContent = "Timer stopped";
+      document.getElementById("progressBar").style.width = "0%";
+      appendLog("⏹️ Timer manually stopped.");
+      document.getElementById("startButton").disabled = false;
+      document.getElementById("stopButton").disabled = true;
+    }
+  </script>
+</body>
+</html>
