@@ -6,28 +6,21 @@
   <title>AI Study Timer</title>
   <style>
     :root {
-      --bg-light: #f2f4f8;
-      --bg-dark: #1e1e1e;
-      --text-light: #333;
-      --text-dark: #f0f0f0;
+      --bg: #f9f9f9;
+      --text: #222;
       --accent: #4a90e2;
       --progress: #76c7c0;
+      --border: #ccc;
     }
 
     body {
       font-family: 'Segoe UI', sans-serif;
-      background-color: var(--bg-light);
-      color: var(--text-light);
+      background-color: var(--bg);
+      color: var(--text);
       display: flex;
       flex-direction: column;
       align-items: center;
       padding: 2rem;
-      transition: background-color 0.3s ease, color 0.3s ease;
-    }
-
-    body.dark {
-      background-color: var(--bg-dark);
-      color: var(--text-dark);
     }
 
     h1 {
@@ -40,11 +33,7 @@
       margin-bottom: 1rem;
       text-align: center;
       font-size: 0.95rem;
-      color: #666;
-    }
-
-    body.dark #instructions {
-      color: #bbb;
+      color: #555;
     }
 
     input[type="text"] {
@@ -52,17 +41,9 @@
       max-width: 500px;
       padding: 0.75rem;
       font-size: 1rem;
-      border: 1px solid #ccc;
+      border: 1px solid var(--border);
       border-radius: 10px;
       margin-bottom: 1rem;
-      background: white;
-      color: #333;
-    }
-
-    body.dark input[type="text"] {
-      background: #333;
-      color: #f0f0f0;
-      border-color: #555;
     }
 
     .controls {
@@ -82,7 +63,7 @@
     }
 
     button:disabled {
-      background-color: #888;
+      background-color: #ccc;
       cursor: not-allowed;
     }
 
@@ -102,15 +83,11 @@
       margin-top: 1rem;
     }
 
-    body.dark #progressContainer {
-      background-color: #444;
-    }
-
     #progressBar {
       height: 100%;
       width: 0%;
       background-color: var(--progress);
-      transition: width 0.5s ease;
+      transition: width 0.3s ease;
     }
 
     #log {
@@ -118,42 +95,20 @@
       max-width: 500px;
       width: 100%;
       font-size: 0.9rem;
-      background: rgba(255, 255, 255, 0.7);
+      background: #ffffffaa;
       border-radius: 10px;
       padding: 1rem;
       white-space: pre-wrap;
       border: 1px solid #ccc;
     }
-
-    body.dark #log {
-      background: rgba(0, 0, 0, 0.3);
-      border-color: #666;
-      color: #ddd;
-    }
-
-    #darkToggle {
-      position: absolute;
-      top: 1rem;
-      right: 1rem;
-      font-size: 0.9rem;
-      background: none;
-      border: 1px solid var(--accent);
-      color: var(--accent);
-      padding: 0.4rem 0.8rem;
-      border-radius: 6px;
-      cursor: pointer;
-    }
   </style>
 </head>
 <body>
-  <button id="darkToggle" onclick="toggleDarkMode()">🌙 Toggle Dark Mode</button>
-
   <h1>AI Study Timer</h1>
 
   <div id="instructions">
-    Enter your study plan using natural language like:<br>
-    <em>"Study 45 minutes, 5 minute breaks, 4 sessions"</em><br>
-    Then click Start to begin your timer!
+    Enter your study plan like:<br>
+    <em>"Study 45 minutes, 5 minute breaks, 4 sessions"</em>
   </div>
 
   <input
@@ -175,16 +130,12 @@
 
   <div id="log"></div>
 
-  <audio id="alarmSound" src="/static/alarm.wav"></audio>
+  <audio id="alarmSound" src="/static/alarm.wav" preload="auto"></audio>
 
   <script>
     let intervalId = null;
     let lastSessionType = null;
     let totalSteps = 0;
-
-    function toggleDarkMode() {
-      document.body.classList.toggle('dark');
-    }
 
     function appendLog(text) {
       const log = document.getElementById('log');
@@ -202,25 +153,25 @@
         const seconds = data.time_remaining_seconds % 60;
         display.textContent = `${data.session_type.toUpperCase()} - ${minutes}:${seconds.toString().padStart(2, '0')}`;
 
-        // Play alarm on session transition
+        // Sound and log on transition
         if (lastSessionType && lastSessionType !== data.session_type) {
-          document.getElementById('alarmSound').play();
-          appendLog(`Switched to ${data.session_type.toUpperCase()} session`);
+          document.getElementById('alarmSound').play().catch(() => {}); // prevent autoplay error
+          appendLog(`🔔 Switched to ${data.session_type.toUpperCase()}`);
         }
 
-        // Update progress bar
-        if (totalSteps > 0 && data.step !== undefined) {
-          const progress = (data.step - 1 + (1 - data.time_remaining_seconds / (data.total_steps ? (data.total_steps * 60) : 1))) / totalSteps;
-          document.getElementById('progressBar').style.width = `${Math.min(progress * 100, 100)}%`;
+        // Step-based progress bar
+        if (totalSteps > 0 && data.step !== undefined && data.total_steps !== undefined) {
+          const stepProgress = data.step / totalSteps;
+          document.getElementById('progressBar').style.width = `${Math.min(stepProgress * 100, 100)}%`;
         }
 
         lastSessionType = data.session_type;
       } else if (data.message === "Completed") {
         display.textContent = "Session Complete!";
         clearInterval(intervalId);
-        document.getElementById('alarmSound').play();
+        document.getElementById('alarmSound').play().catch(() => {});
         document.getElementById('progressBar').style.width = `100%`;
-        appendLog("🎉 Session complete!");
+        appendLog("🎉 All sessions completed!");
         lastSessionType = null;
       } else {
         display.textContent = "No timer running";
@@ -246,7 +197,7 @@
       const result = await response.json();
       if (result.schedule) {
         totalSteps = result.schedule.length;
-        appendLog("📘 Timer started with " + totalSteps + " total steps.");
+        appendLog(`📘 Timer started with ${totalSteps} intervals.`);
       }
 
       fetchStatus();
@@ -255,6 +206,12 @@
 
       document.getElementById('startButton').disabled = true;
       document.getElementById('stopButton').disabled = false;
+
+      // Preload sound (trigger permission)
+      document.getElementById('alarmSound').play().then(audio => {
+        audio.pause();
+        audio.currentTime = 0;
+      }).catch(() => {});
     }
 
     async function stopTimer() {
