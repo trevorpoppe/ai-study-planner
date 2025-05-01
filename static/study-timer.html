@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Study Timer</title>
+  <title>AI Powered Pomodoro Timer</title>
   <style>
     body {
       font-family: 'Segoe UI', sans-serif;
@@ -94,6 +94,7 @@
       white-space: pre-wrap;
       border: 1px solid #ccc;
     }
+
   </style>
 </head>
 <body>
@@ -110,6 +111,20 @@
     <button id="startButton" onclick="startTimer()">Start</button>
     <button id="stopButton" onclick="stopTimer()">Stop</button>
   </div>
+
+  <a href="/export" download style="
+  display: inline-block;
+  background-color: #27ae60;
+  color: white;
+  padding: 0.75rem 1.5rem;
+  border-radius: 10px;
+  text-align: center;
+  text-decoration: none;
+  font-size: 1rem;
+  margin-bottom: 1rem;
+  ">
+    📄 Download Study Log
+  </a>
 
   <div id="timerDisplay">No timer running</div>
 
