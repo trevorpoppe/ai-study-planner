@@ -177,3 +177,15 @@ def export_study_log():
     output.seek(0)
     return Response(content=output.getvalue(), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=study_log.csv"})
 
+@app.get("/status")
+def get_status():
+    if global_timer and global_timer.running:
+        return {
+            "session_type": global_timer.current_session_type,
+            "time_remaining_seconds": global_timer.get_time_remaining(),
+            "step": global_timer.current_step,             # current session index (0-based)
+            "total_steps": global_timer.total_steps        # total number of sessions
+        }
+    return {"message": "No timer running"}
+
+
