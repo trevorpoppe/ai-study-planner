@@ -179,3 +179,19 @@ def export_study_log():
             media_type="text/plain",
             status_code=500
         )
+
+@app.on_event("startup")
+def create_table_if_missing():
+    db = get_db()
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS study_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_number INTEGER,
+            session_type TEXT,
+            duration_seconds INTEGER,
+            start_time TEXT,
+            end_time TEXT
+        )
+    """)
+    db.commit()
+
