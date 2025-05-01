@@ -25,6 +25,7 @@ class SessionTimer:
         self.paused_at = None
         self.start_time = None
         self._lock = threading.Lock()
+        self.logged_steps = set()  # track which steps have been logged
 
     def start(self):
         self.running = True
@@ -33,6 +34,13 @@ class SessionTimer:
 
     def _run_timer(self):
         while self.running and self.current_step < self.total_steps:
+            session_type, duration = self.schedule[self.current_step]
+
+            # Log only once per session step
+            if self.current_step not in self.logged_steps:
+                log_session(self.current_step + 1, session_type, duration)
+                self.logged_steps.add(self.current_step)
+
             while self.time_remaining > 0 and self.running:
                 if self.paused:
                     time.sleep(0.5)
@@ -42,8 +50,6 @@ class SessionTimer:
                     self.time_remaining -= 1
 
             if self.running:
-                session_type, duration = self.schedule[self.current_step]
-                log_session(self.current_step + 1, session_type, duration)
                 self.current_step += 1
                 if self.current_step < self.total_steps:
                     with self._lock:
