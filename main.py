@@ -158,3 +158,22 @@ def get_status():
     if global_timer:
         return global_timer.status()
     return {"message": "No timer running"}
+
+@app.get("/export")
+def export_study_log():
+    db = get_db()
+    cursor = db.execute("SELECT * FROM study_logs")
+    logs = cursor.fetchall()
+    
+    # Convert to CSV
+    import csv
+    from io import StringIO
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow([col[0] for col in cursor.description])  # headers
+    for row in logs:
+        writer.writerow(row)
+    
+    output.seek(0)
+    return Response(content=output.getvalue(), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=study_log.csv"})
+
