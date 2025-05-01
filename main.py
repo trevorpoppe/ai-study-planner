@@ -63,7 +63,6 @@ Do not include any explanation or formatting.
 
 Prompt: "{message}"
 """
-
     try:
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
@@ -152,15 +151,31 @@ def get_status():
 
 @app.get("/export")
 def export_study_log():
-    db = get_db()
-    cursor = db.execute("SELECT * FROM study_logs")
-    logs = cursor.fetchall()
+    try:
+        db = get_db()
+        cursor = db.execute("SELECT * FROM study_logs")
+        logs = cursor.fetchall()
 
-    output = StringIO()
-    writer = csv.writer(output)
-    writer.writerow([col[0] for col in cursor.description])  # headers
-    for row in logs:
-        writer.writerow(row)
-    output.seek(0)
+        if not logs:
+            return Response("No logs available.", media_type="text/plain")
 
-    return Response(content=output.getvalue(), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=study_log.csv"})
+        output = StringIO()
+        writer = csv.writer(output)
+        writer.writerow([col[0] for col in cursor.description])  # headers
+        for row in logs:
+            writer.writerow(row)
+        output.seek(0)
+
+        return Response(
+            content=output.getvalue(),
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=study_log.csv"}
+        )
+
+    except Exception as e:
+        print("Export error:", e)
+        return Response(
+            content=f"Internal Server Error\n\n{str(e)}",
+            media_type="text/plain",
+            status_code=500
+        )
