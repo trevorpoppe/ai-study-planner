@@ -171,13 +171,20 @@
       if (data.session_type && data.time_remaining_seconds !== undefined) {
         const minutes = Math.floor(data.time_remaining_seconds / 60);
         const seconds = data.time_remaining_seconds % 60;
-        const sessionNumber = data.step + 1;
-        const totalSessions = data.total_steps;
-        display.textContent = `${data.session_type.toUpperCase()} - ${minutes}:${seconds.toString().padStart(2, '0')} (Session ${sessionNumber} of ${totalSessions})`;
 
-        // NEW: handle step change and update duration
-        if (lastStep !== data.step) {
-          lastStep = data.step;
+        const totalSteps = data.total_steps;
+        const currentStep = data.step;
+        const sessionIndex = Math.floor(currentStep / 2);  // 0-based index of study sessions
+        const totalSessions = Math.floor((totalSteps + 1) / 2);  // Count only study blocks
+        const isStudy = data.session_type.toLowerCase() === "study";
+        const sessionLabel = isStudy
+          ? `(Session ${sessionIndex + 1} of ${totalSessions})`
+          : `(Break between sessions)`;
+
+        display.textContent = `${data.session_type.toUpperCase()} - ${minutes}:${seconds.toString().padStart(2, '0')} ${sessionLabel}`;
+
+        if (lastStep !== currentStep) {
+          lastStep = currentStep;
           currentStepDuration = data.time_remaining_seconds;
           appendLog(`Switched to ${data.session_type.toUpperCase()} session`);
           playAlarm();
@@ -216,7 +223,7 @@
         appendLog("▶️ Timer resumed.");
       } else if (result.schedule) {
         appendLog("📘 Timer started.");
-        lastStep = null; // Reset step so we detect session 0 on first fetch
+        lastStep = null;
         currentStepDuration = null;
       }
 
