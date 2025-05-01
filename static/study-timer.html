@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -29,7 +28,6 @@
       color: #555;
       line-height: 1.5;
     }
-
 
     input[type="text"] {
       width: 100%;
@@ -96,7 +94,6 @@
       white-space: pre-wrap;
       border: 1px solid #ccc;
     }
-
   </style>
 </head>
 <body>
@@ -111,20 +108,20 @@
 
   <div class="controls">
     <button id="startButton" onclick="startTimer()">Start</button>
-    <button id="stopButton" onclick="stopTimer()">Stop</button>
+    <button id="pauseButton" onclick="pauseTimer()" disabled>Pause</button>
+    <button id="stopButton" onclick="stopTimer()" disabled>Stop</button>
   </div>
 
   <a href="/export" download style="
-  display: inline-block;
-  background-color: #27ae60;
-  color: white;
-  padding: 0.75rem 1.5rem;
-  border-radius: 10px;
-  text-align: center;
-  text-decoration: none;
-  font-size: 1rem;
-  margin-bottom: 1rem;
-  ">
+    display: inline-block;
+    background-color: #27ae60;
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 10px;
+    text-align: center;
+    text-decoration: none;
+    font-size: 1rem;
+    margin-bottom: 1rem;">
     📄 Download Study Log
   </a>
 
@@ -148,6 +145,7 @@
       const log = document.getElementById('log');
       const timestamp = new Date().toLocaleTimeString();
       log.textContent += `[${timestamp}] ${text}\n`;
+      log.scrollTop = log.scrollHeight;
     }
 
     function playAlarm() {
@@ -178,11 +176,9 @@
       if (data.session_type && data.time_remaining_seconds !== undefined) {
         const minutes = Math.floor(data.time_remaining_seconds / 60);
         const seconds = data.time_remaining_seconds % 60;
-        if (data.step < data.total_steps) {
-          const sessionNumber = data.step + 1;
-          const totalSessions = data.total_steps;
-          display.textContent = `${data.session_type.toUpperCase()} - ${minutes}:${seconds.toString().padStart(2, '0')} (Session ${sessionNumber} of ${totalSessions})`;
-        }
+        const sessionNumber = data.step + 1;
+        const totalSessions = data.total_steps;
+        display.textContent = `${data.session_type.toUpperCase()} - ${minutes}:${seconds.toString().padStart(2, '0')} (Session ${sessionNumber} of ${totalSessions})`;
 
         if (data.step !== lastStep) {
           lastStep = data.step;
@@ -198,11 +194,13 @@
         document.getElementById("progressBar").style.width = "100%";
         playAlarm();
         appendLog("🎉 All sessions completed!");
+        updateButtonStates("reset");
       } else {
         display.textContent = "No timer running";
         clearInterval(intervalId);
         clearInterval(progressTimer);
         document.getElementById("progressBar").style.width = "0%";
+        updateButtonStates("reset");
       }
     }
 
@@ -216,12 +214,28 @@
       });
 
       const result = await response.json();
-      if (result.schedule) appendLog("📘 Timer started.");
+      if (result.message === "Resumed") {
+        appendLog("▶️ Timer resumed.");
+      } else if (result.schedule) {
+        appendLog("📘 Timer started.");
+        lastStep = 0;
+      }
 
       fetchStatus();
       intervalId = setInterval(fetchStatus, 1000);
-      document.getElementById("startButton").disabled = true;
-      document.getElementById("stopButton").disabled = false;
+      updateButtonStates("running");
+    }
+
+    async function pauseTimer() {
+      const response = await fetch('/pause-timer', { method: 'POST' });
+      const result = await response.json();
+      if (result.message === "Timer paused") {
+        appendLog("⏸️ Timer paused.");
+        clearInterval(intervalId);
+        clearInterval(progressTimer);
+        document.getElementById("timerDisplay").textContent += " (Paused)";
+        updateButtonStates("paused");
+      }
     }
 
     async function stopTimer() {
@@ -231,8 +245,27 @@
       document.getElementById("timerDisplay").textContent = "Timer stopped";
       document.getElementById("progressBar").style.width = "0%";
       appendLog("⏹️ Timer manually stopped.");
-      document.getElementById("startButton").disabled = false;
-      document.getElementById("stopButton").disabled = true;
+      updateButtonStates("reset");
+    }
+
+    function updateButtonStates(state) {
+      const startBtn = document.getElementById("startButton");
+      const pauseBtn = document.getElementById("pauseButton");
+      const stopBtn = document.getElementById("stopButton");
+
+      if (state === "running") {
+        startBtn.disabled = true;
+        pauseBtn.disabled = false;
+        stopBtn.disabled = false;
+      } else if (state === "paused") {
+        startBtn.disabled = false;
+        pauseBtn.disabled = true;
+        stopBtn.disabled = false;
+      } else {
+        startBtn.disabled = false;
+        pauseBtn.disabled = true;
+        stopBtn.disabled = true;
+      }
     }
   </script>
 </body>
