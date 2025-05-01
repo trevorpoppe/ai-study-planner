@@ -138,8 +138,9 @@
   <script>
     let intervalId = null;
     let progressTimer = null;
-    let lastStep = -1;
-    let stepDuration = 0;
+    let lastStep = null;
+    let currentStepDuration = null;
+    let currentRemaining = null;
 
     function appendLog(text) {
       const log = document.getElementById('log');
@@ -155,17 +156,11 @@
       sound.play().catch(e => console.warn("Audio playback failed", e));
     }
 
-    function resetProgress(duration) {
-      clearInterval(progressTimer);
-      const bar = document.getElementById("progressBar");
-      let elapsed = 0;
-      bar.style.width = "0%";
-      progressTimer = setInterval(() => {
-        elapsed += 1;
-        let percent = Math.min((elapsed / duration) * 100, 100);
-        bar.style.width = percent + "%";
-        if (percent >= 100) clearInterval(progressTimer);
-      }, 1000);
+    function updateProgressBar() {
+      if (currentStepDuration && currentRemaining != null) {
+        const percent = 100 * (1 - currentRemaining / currentStepDuration);
+        document.getElementById("progressBar").style.width = percent + "%";
+      }
     }
 
     async function fetchStatus() {
@@ -180,17 +175,20 @@
         const totalSessions = data.total_steps;
         display.textContent = `${data.session_type.toUpperCase()} - ${minutes}:${seconds.toString().padStart(2, '0')} (Session ${sessionNumber} of ${totalSessions})`;
 
-        if (data.step !== lastStep) {
+        // NEW: handle step change and update duration
+        if (lastStep !== data.step) {
           lastStep = data.step;
-          stepDuration = data.time_remaining_seconds;
-          playAlarm();
+          currentStepDuration = data.time_remaining_seconds;
           appendLog(`Switched to ${data.session_type.toUpperCase()} session`);
-          resetProgress(stepDuration);
+          playAlarm();
         }
+
+        currentRemaining = data.time_remaining_seconds;
+        updateProgressBar();
+
       } else if (data.message === "Completed") {
         display.textContent = "Session Complete!";
         clearInterval(intervalId);
-        clearInterval(progressTimer);
         document.getElementById("progressBar").style.width = "100%";
         playAlarm();
         appendLog("🎉 All sessions completed!");
@@ -198,7 +196,6 @@
       } else {
         display.textContent = "No timer running";
         clearInterval(intervalId);
-        clearInterval(progressTimer);
         document.getElementById("progressBar").style.width = "0%";
         updateButtonStates("reset");
       }
@@ -219,7 +216,8 @@
         appendLog("▶️ Timer resumed.");
       } else if (result.schedule) {
         appendLog("📘 Timer started.");
-        lastStep = -1; // Fixes Session 2 bug
+        lastStep = null; // Reset step so we detect session 0 on first fetch
+        currentStepDuration = null;
       }
 
       fetchStatus();
@@ -233,7 +231,6 @@
       if (result.message === "Timer paused") {
         appendLog("⏸️ Timer paused.");
         clearInterval(intervalId);
-        clearInterval(progressTimer);
         document.getElementById("timerDisplay").textContent += " (Paused)";
         updateButtonStates("paused");
       }
@@ -242,7 +239,6 @@
     async function stopTimer() {
       await fetch('/stop-timer', { method: 'POST' });
       clearInterval(intervalId);
-      clearInterval(progressTimer);
       document.getElementById("timerDisplay").textContent = "Timer stopped";
       document.getElementById("progressBar").style.width = "0%";
       appendLog("⏹️ Timer manually stopped.");
