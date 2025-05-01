@@ -43,12 +43,23 @@ You are a natural language interpreter for study plans. Extract the following:
 - "break_duration" in seconds
 - "cycles" (number of sessions)
 
+Only include the number of seconds (always convert minutes to seconds).
+Only assign values based on their associated label — e.g. "study", "break", or "session".
+
+For example:
+- "Study 25 minutes with 5 min breaks for 4 sessions" → study_duration: 1500, break_duration: 300, cycles: 4
+- "Study for 1 minute, 10 second break, 2 sessions" → study_duration: 60, break_duration: 10, cycles: 2
+
+**If both “1 minute” and “10 second” are mentioned, treat them as separate values. Do not add them together unless clearly part of the same label.**
+
 Output raw JSON only like this:
 {{
   "study_duration": 1500,
   "break_duration": 300,
   "cycles": 4
 }}
+
+Do not include any explanation or formatting.
 
 Prompt: "{message}"
 """
