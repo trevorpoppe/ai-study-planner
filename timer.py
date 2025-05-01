@@ -1,5 +1,17 @@
 import time
 import threading
+from database import get_db
+from datetime import datetime
+
+def log_session(session_number, session_type, duration):
+    db = get_db()
+    start_time = datetime.now().isoformat()
+    end_time = (datetime.now() + duration).isoformat()
+    db.execute(
+        "INSERT INTO study_logs (session_number, session_type, duration_seconds, start_time, end_time) VALUES (?, ?, ?, ?, ?)",
+        (session_number, session_type, duration.total_seconds(), start_time, end_time),
+    )
+    db.commit()
 
 class SessionTimer:
     def __init__(self, schedule):
