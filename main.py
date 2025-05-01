@@ -188,4 +188,13 @@ def get_status():
         }
     return {"message": "No timer running"}
 
+@app.post("/pause-timer")
+def pause_timer():
+    if global_timer and global_timer.running:
+        global_timer.pause()
+        return {"message": "Timer paused"}
+    raise HTTPException(status_code=400, detail="No active timer")
+
+
+
 
