@@ -1,21 +1,22 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 import os
+import json
 from timer import SessionTimer
 from dotenv import load_dotenv
+from database import get_db
 import openai
-import json
+import csv
+from io import StringIO
 
 load_dotenv()
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-# FastAPI app
 app = FastAPI()
 
-# Allow frontend to call API
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -24,18 +25,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve static HTML
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/")
 def serve_home():
     return FileResponse(os.path.join("static", "study-timer.html"))
 
-# Data model
 class UserInput(BaseModel):
     message: str
 
-# Global timer instance
 global_timer = None
 
 def extract_preferences(message: str):
@@ -45,13 +43,6 @@ You are a natural language interpreter for study plans. Extract the following:
 - "break_duration" in seconds
 - "cycles" (number of sessions)
 
-Only include the number of seconds (always convert minutes to seconds).
-Only assign values based on their associated label — e.g. "study", "break", or "session".
-
-For example:
-- "Study 25 minutes with 5 min breaks for 4 sessions" → study_duration: 1500, break_duration: 300, cycles: 4
-- "Study for 1 minute, 10 second break, 2 sessions" → study_duration: 60, break_duration: 10, cycles: 2
-
 Output raw JSON only like this:
 {{
   "study_duration": 1500,
@@ -59,21 +50,14 @@ Output raw JSON only like this:
   "cycles": 4
 }}
 
-Do not include any explanation or formatting.
-
 Prompt: "{message}"
 """
-
-
 
     try:
         response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[
-                {
-                    "role": "system",
-                    "content": "You extract structured data from natural language prompts. Respond with JSON only and no formatting or explanation."
-                },
+                {"role": "system", "content": "You extract structured data from natural language prompts. Respond with JSON only."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0
@@ -81,24 +65,11 @@ Prompt: "{message}"
         content = response.choices[0].message['content'].strip()
         data = json.loads(content)
 
-        study_duration = data.get("study_duration")
-        break_duration = data.get("break_duration")
-        cycles = data.get("cycles")
-
-        missing = []
-        if not study_duration:
-            missing.append("study_duration")
-        if not break_duration:
-            missing.append("break_duration")
-        if not cycles:
-            missing.append("cycles")
-
         return {
-            "status": "complete" if not missing else "incomplete",
-            "study_duration": study_duration,
-            "break_duration": break_duration,
-            "cycles": cycles,
-            "missing_fields": missing
+            "status": "complete",
+            "study_duration": data["study_duration"],
+            "break_duration": data["break_duration"],
+            "cycles": data["cycles"]
         }
 
     except Exception as e:
@@ -112,7 +83,6 @@ Prompt: "{message}"
             "error": str(e)
         }
 
-# Build the session schedule
 def build_schedule(study_duration, break_duration, cycles):
     schedule = []
     for i in range(cycles):
@@ -122,28 +92,29 @@ def build_schedule(study_duration, break_duration, cycles):
     return schedule
 
 @app.post("/start-timer")
-def start_timer(user_input: UserInput, background_tasks: BackgroundTasks):
+def start_timer(user_input: UserInput):
     global global_timer
-    try:
-        prefs = extract_preferences(user_input.message)
-        if prefs["status"] == "incomplete":
-            return {
-                "status": "incomplete",
-                "message": "Missing required fields",
-                "missing_fields": prefs["missing_fields"]
-            }
 
-        schedule = build_schedule(
-            prefs["study_duration"],
-            prefs["break_duration"],
-            prefs["cycles"]
-        )
-        global_timer = SessionTimer(schedule)
-        print("Schedule loaded:", schedule)
-        global_timer.start()
-        return {"message": "Timer started", "schedule": schedule}
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    if global_timer and global_timer.paused:
+        global_timer.resume()
+        return {"message": "Resumed"}
+
+    prefs = extract_preferences(user_input.message)
+    if prefs["status"] == "incomplete":
+        return {
+            "status": "incomplete",
+            "message": "Missing required fields",
+            "missing_fields": prefs["missing_fields"]
+        }
+
+    schedule = build_schedule(
+        prefs["study_duration"],
+        prefs["break_duration"],
+        prefs["cycles"]
+    )
+    global_timer = SessionTimer(schedule)
+    global_timer.start()
+    return {"message": "Timer started", "schedule": schedule}
 
 @app.post("/stop-timer")
 def stop_timer():
@@ -153,9 +124,18 @@ def stop_timer():
         return {"message": "Timer stopped"}
     raise HTTPException(status_code=404, detail="No active timer")
 
+@app.post("/pause-timer")
+def pause_timer():
+    global global_timer
+    if global_timer and global_timer.running:
+        global_timer.pause()
+        return {"message": "Timer paused"}
+    raise HTTPException(status_code=400, detail="No active timer")
+
 @app.get("/status")
 def get_status():
-    if global_timer:
+    global global_timer
+    if global_timer and global_timer.running:
         return global_timer.status()
     return {"message": "No timer running"}
 
@@ -164,37 +144,12 @@ def export_study_log():
     db = get_db()
     cursor = db.execute("SELECT * FROM study_logs")
     logs = cursor.fetchall()
-    
-    # Convert to CSV
-    import csv
-    from io import StringIO
+
     output = StringIO()
     writer = csv.writer(output)
     writer.writerow([col[0] for col in cursor.description])  # headers
     for row in logs:
         writer.writerow(row)
-    
     output.seek(0)
+
     return Response(content=output.getvalue(), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=study_log.csv"})
-
-@app.get("/status")
-def get_status():
-    if global_timer and global_timer.running:
-        return {
-            "session_type": global_timer.current_session_type,
-            "time_remaining_seconds": global_timer.get_time_remaining(),
-            "step": global_timer.current_step,             # current session index (0-based)
-            "total_steps": global_timer.total_steps        # total number of sessions
-        }
-    return {"message": "No timer running"}
-
-@app.post("/pause-timer")
-def pause_timer():
-    if global_timer and global_timer.running:
-        global_timer.pause()
-        return {"message": "Timer paused"}
-    raise HTTPException(status_code=400, detail="No active timer")
-
-
-
-
